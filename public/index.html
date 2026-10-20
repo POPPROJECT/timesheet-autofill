@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timesheet Autofill</title>
+<style>
+  :root {
+    --bg: #f4f5f9; --card: #ffffff; --sunken: #f8f9fc; --ink: #151a27; --muted: #5f6b80; --faint: #98a2b3; --line: #e3e7ef;
+    --accent: #4f46e5; --accent-soft: #eef0ff; --accent-ink: #ffffff;
+    --warn: #b54708; --warn-soft: #fff4dc; --bad: #c4320a; --bad-soft: #fff1ec; --ok: #067647; --ok-soft: #e7f8ef;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .06);
+    --radius: 12px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1118; --card: #171b25; --sunken: #121620; --ink: #e8eaf0; --muted: #a0a9ba; --faint: #6b7487; --line: #272d3b;
+      --accent: #8b87ff; --accent-soft: #23234a; --accent-ink: #0e1118;
+      --warn: #fdb022; --warn-soft: #3a2a08; --bad: #ff8a65; --bad-soft: #3b1c14; --ok: #4ad295; --ok-soft: #0f3324;
+      --shadow: none;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  [hidden] { display: none !important; }
+
+  /* Header + tabs */
+  header { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 28px 0; }
+  .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 14px; letter-spacing: .02em; }
+  .title h1 { font-size: 16px; margin: 0; line-height: 1.2; }
+  .title p { margin: 0; color: var(--muted); font-size: 12px; }
+  .status { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-size: 12px; font-weight: 600; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .status.running { background: var(--accent-soft); color: var(--accent); }
+  .status.running::before { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  nav { display: flex; gap: 4px; padding: 10px 24px 0; overflow-x: auto; }
+  nav button { border: 0; background: none; color: var(--muted); padding: 10px 14px 12px; font: inherit; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  nav button:hover { color: var(--ink); }
+  nav button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sunken); border: 1px solid var(--line); font-size: 11px; }
+  nav button[aria-selected="true"] .num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .pill { padding: 1px 8px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 600; }
+
+  /* Layout */
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; padding: 22px 28px 40px; align-items: start; max-width: 1440px; margin: 0 auto; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; padding: 18px 16px 32px; } .bar { padding: 12px 16px 0; } nav { padding: 8px 8px 0; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 18px; }
+  .card-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+  .card-head h2 { font-size: 15px; margin: 0; }
+  .card-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .card-head .actions { margin-left: auto; display: flex; gap: 8px; }
+
+  /* Form */
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+  .field { margin-bottom: 14px; }
+  input[type=text], input[type=url], input[type=month], select, textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunken); color: var(--ink); font: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
+  button.btn { font: inherit; font-weight: 600; padding: 8px 15px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.btn:hover:not(:disabled) { border-color: var(--faint); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row.end { justify-content: flex-end; margin-top: 4px; }
+
+  /* CSV */
+  #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; color: var(--muted); cursor: pointer; background: var(--sunken); transition: border-color .15s, background .15s; }
+  #drop:hover, #drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  #drop svg { display: block; margin: 0 auto 8px; }
+  #drop strong { color: var(--ink); }
+  #drop.loaded { border-style: solid; border-color: var(--line); background: var(--card); text-align: left; display: flex; align-items: center; gap: 14px; padding: 14px 16px; color: var(--ink); }
+  #drop.loaded:hover { border-color: var(--accent); }
+  #drop .file-icon { width: 38px; height: 38px; border-radius: 8px; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; flex: none; }
+  #drop .file-name { font-weight: 600; }
+  #drop .file-meta { color: var(--muted); font-size: 12px; }
+  #drop .replace { margin-left: auto; color: var(--accent); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0 12px; }
+  @media (max-width: 680px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 18px; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .stat.warn b { color: var(--warn); }
+  .table-wrap { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td { padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  tr:first-child td { border-top: 0; }
+  tr.day td { background: var(--sunken); position: sticky; top: 0; z-index: 1; padding-top: 10px; padding-bottom: 10px; border-top: 2px solid var(--line); }
+  .day-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .d-date { font-weight: 700; font-size: 14px; }
+  .d-iso { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .d-count { color: var(--muted); font-size: 12px; }
+  .d-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .chip { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.none { background: var(--sunken); color: var(--faint); border: 1px solid var(--line); }
+  tr.off td:not(:first-child) { color: var(--faint); text-decoration: line-through; }
+  td.c { width: 34px; }
+  td.h { white-space: nowrap; text-align: right; width: 60px; font-variant-numeric: tabular-nums; }
+  td.r { white-space: nowrap; width: 80px; }
+  .tag { display: inline-block; padding: 0 7px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--sunken); border: 1px solid var(--line); color: var(--muted); }
+  input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  /* Timesheets tab */
+  .targets { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 680px) { .targets { grid-template-columns: 1fr; } }
+  .target { border: 1px solid var(--line); border-radius: 12px; padding: 18px; background: var(--sunken); display: flex; flex-direction: column; gap: 10px; }
+  .target-head { display: flex; align-items: center; gap: 10px; }
+  .badge { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--accent-soft); color: var(--accent); }
+  .target h3 { margin: 0; font-size: 15px; }
+  .target small { color: var(--muted); }
+  .target ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .target .btn { align-self: flex-start; margin-top: 4px; }
+  .vpn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 3px 8px; align-self: flex-start; }
+  .empty { text-align: center; padding: 34px 16px; color: var(--muted); }
+  .empty .btn { margin-top: 12px; }
+
+  /* Report tab */
+  .sections { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 680px) { .sections { grid-template-columns: 1fr; } }
+  .sections .field:nth-child(-n+2) { grid-column: 1 / -1; }
+  .sections .field:nth-child(-n+2) textarea { min-height: 150px; }
+  .count { float: right; font-weight: 500; color: var(--faint); }
+
+  /* Activity */
+  aside { position: sticky; top: 128px; }
+  .activity { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .activity-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .activity-head button { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+  #prompt { margin: 14px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 14px; }
+  #promptText { font-weight: 600; }
+  #prompt ul { margin: 8px 0 0; padding-left: 18px; max-height: 240px; overflow: auto; font-size: 12px; }
+  #promptButtons { margin-top: 12px; }
+  #prompt li.over { color: var(--bad); font-weight: 600; }
+  #log { padding: 12px 16px; height: 440px; overflow: auto; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+  #log .muted { color: var(--faint); }
+  #log .err { color: var(--bad); font-weight: 600; }
+  #log .ok { color: var(--ok); font-weight: 600; }
+  #msg { margin: 0; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--bad); background: var(--bad-soft); }
+  #msg:empty { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">TA</div>
+    <div class="title"><h1>Timesheet Autofill</h1><p>ODC · NHR · Monthly Report</p></div>
+    <span id="status" class="status">Ready</span>
+  </div>
+  <nav role="tablist">
+    <button role="tab" data-tab="setup"><span class="num">1</span>Setup <span class="pill" id="setupPill">No CSV</span></button>
+    <button role="tab" data-tab="timesheets"><span class="num">2</span>Timesheets <span class="pill" id="rowsPill">0 rows</span></button>
+    <button role="tab" data-tab="report"><span class="num">3</span>Monthly Report</button>
+  </nav>
+</header>
+
+<main>
+  <div>
+    <!-- Setup -->
+    <div data-panel="setup">
+      <div class="card">
+        <div class="card-head">
+          <div><h2>Settings</h2><p>Saved on this machine. Name and role go into the Monthly Report. Leave role empty to pick it on the report page yourself.</p></div>
+          <div class="actions"><button class="btn" id="saveSettings">Save</button></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="reporterName">Your name</label><input id="reporterName" type="text" placeholder="Name as it should appear on the report"></div>
+          <div class="field"><label for="reporterRole">Your role</label>
+            <select id="reporterRole">
+              <option value="">Choose on the report page each time</option>
+              <option>Senior Quality Assurance Automation</option><option>Senior Quality Assurance</option>
+              <option>Senior Backend Developer</option><option>Senior DevSecOps</option><option>Senior Frontend Developer</option>
+              <option>Mid Quality Assurance Automation</option><option>Mid Quality Assurance</option>
+              <option>Mid Backend Developer</option><option>Mid Frontend Developer</option>
+            </select>
+          </div>
+        </div>
+        <details id="urls">
+          <summary class="muted" style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Site URLs <span id="urlsHint" style="color:var(--bad)"></span></summary>
+          <div class="grid2" style="margin-top:12px">
+            <div class="field"><label for="timesheetUrl">ODC timesheet</label><input id="timesheetUrl" type="url"></div>
+            <div class="field"><label for="nhrUrl">NHR timesheet</label><input id="nhrUrl" type="url"></div>
+            <div class="field"><label for="reportUrl">Monthly Report</label><input id="reportUrl" type="url"></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><h2>Timesheet CSV</h2><p>In SharePoint, download the timesheet as CSV and drop it here. Untick rows you don't want sent.</p></div>
+        </div>
+        <div id="drop">
+          <span id="dropLabel">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+            <strong>Drop CSV here</strong> or click to choose
+          </span>
+          <input id="file" type="file" accept=".csv,text/csv" hidden>
+        </div>
+        <div id="csvBody" hidden>
+          <div class="stats">
+            <div class="stat"><b id="statRows">0</b><span>rows selected</span></div>
+            <div class="stat"><b id="statHours">0h</b><span>hours</span></div>
+            <div class="stat"><b id="statDays">0</b><span>days</span></div>
+            <div class="stat" id="statWarnBox"><b id="statWarn">0</b><span>days to check</span></div>
+          </div>
+          <div class="table-wrap"><table><tbody id="rows"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timesheets -->
+    <div data-panel="timesheets" hidden>
+      <div class="card" id="noCsv">
+        <div class="empty">
+          <div>Load the timesheet CSV first.</div>
+          <button class="btn primary" data-goto="setup">Go to Setup</button>
+        </div>
+      </div>
+      <div class="card" id="runCard" hidden>
+        <div class="card-head">
+          <div><h2>Fill timesheets</h2><p id="runSummary"></p></div>
+        </div>
+        <div class="targets">
+          <div class="target">
+            <div class="target-head"><div class="badge">ODC</div><div><h3>ODC</h3><small>PTTEP Resource Management</small></div></div>
+            <span class="vpn">Needs PTTEP VPN</span>
+            <ul><li>Skips rows already on the site</li><li>Saves each entry after you confirm</li><li>Does not Submit the month</li></ul>
+            <button class="btn primary run" data-target="odc" disabled>Fill ODC</button>
+          </div>
+          <div class="target">
+            <div class="target-head"><div class="badge">NHR</div><div><h3>NHR</h3><small>Extosoft HR timesheet</small></div></div>
+            <span class="vpn">Needs Extosoft VPN</span>
+            <ul><li>Periods start 08:00 and skip the 12:00 lunch hour</li><li>Saves the draft after each day</li><li>Does not Submit</li></ul>
+            <button class="btn primary run" data-target="nhr" disabled>Fill NHR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Report -->
+    <div data-panel="report" hidden>
+      <div class="card">
+        <div class="card-head">
+          <div><h2>Monthly Report</h2><p>One item per line. Keep it high level: what users got, not ticket numbers.</p></div>
+          <div class="actions"><button class="btn" id="draft" disabled>Insert ticket list</button></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="month">Month</label><input id="month" type="month"></div>
+          <div class="field"><label for="projectName">Project</label><input id="projectName" type="text" placeholder="As in the report's project list, exactly as in the report's list"></div>
+        </div>
+        <div class="sections" id="sections"></div>
+        <div class="row end">
+          <button class="btn" id="saveReport">Save</button>
+          <button class="btn primary" id="runReport">Fill report form</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="activity">
+      <div class="activity-head">Activity <button id="clearLog">Clear</button></div>
+      <div id="prompt" hidden>
+        <div id="promptText"></div>
+        <ul id="promptItems"></ul>
+        <div class="row" id="promptButtons"></div>
+      </div>
+      <div id="log"><div class="muted">Runs and messages show up here.</div></div>
+      <p id="msg"></p>
+    </div>
+  </aside>
+</main>
+
+<script>
+const SECTIONS = [
+  ['keyHighlights', 'Key Highlights'], ['upcomingFocus', 'Upcoming Focus'], ['issues', 'Issues'],
+  ['concerns', 'Concerns'], ['risks', 'Risks'], ['needSupport', 'Need Support'],
+];
+const CONFIG_FIELDS = ['reporterName', 'reporterRole', 'timesheetUrl', 'nhrUrl', 'reportUrl'];
+const $ = id => document.getElementById(id);
+const saveConfig = () => api('PUT', '/api/config', Object.fromEntries(CONFIG_FIELDS.map(f => [f, $(f).value.trim()])));
+
+let entries = [];
+const included = new Set();
+let running = false;
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter(c => c != null));
+  return node;
+}
+
+async function api(method, path, body, raw) {
+  $('msg').textContent = '';
+  const res = await fetch(path, {
+    method,
+    headers: raw ? { 'content-type': 'application/octet-stream' } : { 'content-type': 'application/json' },
+    body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
+  });
+  const data = await res.json();
+  if (!res.ok) { $('msg').textContent = data.error ?? res.statusText; throw new Error(data.error); }
+  return data;
+}
+
+// Tabs
+function showTab(name) {
+  for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', b.dataset.tab === name);
+  for (const p of document.querySelectorAll('[data-panel]')) p.hidden = p.dataset.panel !== name;
+  try { localStorage.setItem('tab', name); } catch {}
+}
+for (const b of document.querySelectorAll('[data-tab]')) b.onclick = () => showTab(b.dataset.tab);
+for (const b of document.querySelectorAll('[data-goto]')) b.onclick = () => showTab(b.dataset.goto);
+let savedTab = 'setup';
+try { savedTab = localStorage.getItem('tab') ?? 'setup'; } catch {}
+showTab(savedTab);
+
+// Settings
+async function loadSettings() {
+  const config = await api('GET', '/api/config');
+  for (const f of CONFIG_FIELDS) $(f).value = config[f] ?? '';
+  checkUrls();
+}
+// URLs are not in the repo; they are shared privately and pasted here once
+function checkUrls() {
+  const missing = ['timesheetUrl', 'nhrUrl', 'reportUrl'].filter(f => !$(f).value.trim()).length;
+  $('urlsHint').textContent = missing ? `· ${missing} missing` : '';
+  if (missing) $('urls').open = true;
+}
+$('saveSettings').onclick = async () => { await saveConfig(); checkUrls(); log('Settings saved.', 'ok'); };
+$('reporterName').onchange = $('reporterRole').onchange = saveConfig;
+
+// CSV
+const weekday = d => new Date(d + 'T00:00').toLocaleDateString('en-US', { weekday: 'short' });
+const monthName = m => new Date(m + '-01T00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function renderRows() {
+  const body = $('rows');
+  body.replaceChildren();
+  const byDay = Map.groupBy(entries.map((e, i) => ({ ...e, i })), e => e.date);
+  let warnDays = 0;
+  for (const [day, list] of byDay) {
+    const total = list.filter(e => included.has(e.i)).reduce((s, e) => s + e.hours, 0);
+    const dayBox = el('input', { type: 'checkbox', checked: list.every(e => included.has(e.i)) });
+    dayBox.onchange = () => { for (const e of list) dayBox.checked ? included.add(e.i) : included.delete(e.i); renderRows(); };
+    const weekend = ['Sat', 'Sun'].includes(weekday(day));
+    const chips = [];
+    if (weekend) chips.push(['weekend', 'warn']);
+    if (!total) chips.push(['not sent', 'none']);
+    else if (total === 8) chips.push(['8h · complete', 'ok']);
+    else if (total < 8) chips.push([`${total}h · ${8 - total}h short`, 'warn']);
+    else chips.push([`${total}h · ${total - 8}h over · check dates`, 'bad']);
+    if (chips.some(([, c]) => c !== 'ok')) warnDays++;
+    const nice = new Date(day + 'T00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    body.append(el('tr', { className: 'day' },
+      el('td', { className: 'c' }, dayBox),
+      el('td', { colSpan: 3 }, el('div', { className: 'day-line' },
+        el('span', { className: 'd-date' }, nice),
+        el('span', { className: 'd-iso' }, day),
+        el('span', { className: 'd-count' }, `· ${plural(list.length, 'task')}`),
+        el('span', { className: 'd-right' }, ...chips.map(([t, c]) => el('span', { className: `chip ${c}` }, t)))))));
+    for (const e of list) {
+      const box = el('input', { type: 'checkbox', checked: included.has(e.i) });
+      box.onchange = () => { box.checked ? included.add(e.i) : included.delete(e.i); renderRows(); };
+      body.append(el('tr', { className: included.has(e.i) ? '' : 'off' },
+        el('td', { className: 'c' }, box), el('td', { className: 'h' }, `${e.hours}h`),
+        el('td', { className: 'r' }, el('span', { className: 'tag' }, e.remark)), el('td', {}, e.task)));
+    }
+  }
+  const chosen = entries.filter((_, i) => included.has(i));
+  const hours = chosen.reduce((s, e) => s + e.hours, 0);
+  $('statRows').textContent = `${included.size}/${entries.length}`;
+  $('statHours').textContent = `${hours}h`;
+  $('statDays').textContent = byDay.size;
+  $('statWarn').textContent = warnDays;
+  $('statWarnBox').classList.toggle('warn', warnDays > 0);
+  $('rowsPill').textContent = plural(included.size, 'row');
+  const month = entries.length ? entries.map(e => e.date).sort()[0].slice(0, 7) : '';
+  $('runSummary').textContent = `${monthName(month)} · ${plural(included.size, 'row')} · ${hours}h selected. Change the selection in Setup.`;
+  refreshButtons();
+}
+
+async function loadCsv(file) {
+  const { entries: list } = await api('POST', '/api/csv', undefined, await file.arrayBuffer());
+  entries = list;
+  included.clear();
+  entries.forEach((_, i) => included.add(i));
+  const month = entries.map(e => e.date).sort()[0].slice(0, 7);
+  $('drop').classList.add('loaded');
+  $('dropLabel').style.display = 'contents';
+  $('dropLabel').replaceChildren(
+    el('div', { className: 'file-icon', innerHTML: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>' }),
+    el('div', {}, el('div', { className: 'file-name' }, file.name),
+      el('div', { className: 'file-meta' }, `${monthName(month)} · ${plural(entries.length, 'row')} · ${(file.size / 1024).toFixed(1)} KB`)),
+    el('span', { className: 'replace' }, 'Click or drop to replace'));
+  $('csvBody').hidden = false;
+  $('noCsv').hidden = true;
+  $('runCard').hidden = false;
+  $('setupPill').textContent = monthName(month);
+  log(`Loaded ${file.name}: ${plural(entries.length, 'row')}.`);
+  renderRows();
+  if ($('month').value !== month) { $('month').value = month; await loadReport(); }
+}
+$('drop').onclick = () => $('file').click();
+$('file').onchange = () => { $('file').files[0] && loadCsv($('file').files[0]); $('file').value = ''; };
+$('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
+$('drop').ondragleave = () => $('drop').classList.remove('over');
+$('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && loadCsv(e.dataTransfer.files[0]); };
+
+// Monthly Report
+const lines = text => text.split('\n').map(s => s.trim()).filter(Boolean);
+$('sections').append(...SECTIONS.map(([key, title]) => {
+  const count = el('span', { className: 'count' });
+  const area = el('textarea', { id: key, placeholder: 'One item per line' });
+  area.oninput = () => { const n = lines(area.value).length; count.textContent = n ? plural(n, 'item') : ''; };
+  return el('div', { className: 'field' }, el('label', { htmlFor: key }, title, count), area);
+}));
+const refreshCounts = () => SECTIONS.forEach(([key]) => $(key).oninput());
+const currentReport = () => ({
+  projectName: $('projectName').value.trim(),
+  ...Object.fromEntries(SECTIONS.map(([key]) => [key, lines($(key).value)])),
+});
+async function loadReport() {
+  if (!$('month').value) return;
+  const report = await api('GET', `/api/report?month=${$('month').value}`);
+  $('projectName').value = report.projectName ?? '';
+  for (const [key] of SECTIONS) $(key).value = (report[key] ?? []).join('\n');
+  refreshCounts();
+}
+async function saveReport() {
+  if (!$('month').value) throw ($('msg').textContent = 'Pick a month first');
+  await api('PUT', `/api/report?month=${$('month').value}`, currentReport());
+}
+$('month').onchange = loadReport;
+$('saveReport').onclick = async () => { await saveReport(); log(`Saved report for ${monthName($('month').value)}.`, 'ok'); };
+$('draft').onclick = async () => {
+  const { keyHighlights } = await api('GET', `/api/report/draft?month=${$('month').value}`);
+  $('keyHighlights').value = [$('keyHighlights').value.trim(), ...keyHighlights].filter(Boolean).join('\n');
+  refreshCounts();
+};
+$('runReport').onclick = async () => {
+  if (!$('reporterName').value.trim()) {
+    showTab('setup');
+    $('reporterName').focus();
+    throw ($('msg').textContent = 'Set your name in Settings first');
+  }
+  await saveConfig();
+  await saveReport();
+  await api('POST', '/api/run', { target: 'report', report: currentReport() });
+};
+
+// Runs
+for (const button of document.querySelectorAll('.run')) {
+  button.onclick = () => api('POST', '/api/run', { target: button.dataset.target, include: [...included].sort((a, b) => a - b) });
+}
+function refreshButtons() {
+  for (const b of document.querySelectorAll('.run')) b.disabled = running || !included.size;
+  $('runReport').disabled = running;
+  $('draft').disabled = !entries.length;
+  $('status').textContent = running ? `Running ${running}…` : 'Ready';
+  $('status').classList.toggle('running', !!running);
+}
+
+function log(text, cls) {
+  $('log').querySelector('.muted:only-child')?.remove();
+  $('log').append(el('div', { className: cls ?? '' }, text));
+  $('log').scrollTop = $('log').scrollHeight;
+}
+$('clearLog').onclick = () => $('log').replaceChildren();
+
+const BUTTONS = {
+  continue: [['Continue', true, 'primary'], ['Cancel', false]],
+  confirm: [['Add them', true, 'primary'], ['Cancel', false]],
+  done: [['Close browser', true, 'primary']],
+};
+let openAsk = null;
+function showAsk({ id, kind, text, items }) {
+  openAsk = id;
+  $('promptText').textContent = text;
+  $('promptItems').replaceChildren(...(items ?? []).map(i => el('li', { className: i.startsWith('⚠') ? 'over' : '' }, i)));
+  $('promptItems').hidden = !items?.length;
+  $('promptButtons').replaceChildren(...BUTTONS[kind].map(([label, ok, cls]) => {
+    const b = el('button', { className: `btn ${cls ?? ''}` }, label);
+    b.onclick = () => api('POST', '/api/answer', { id, ok });
+    return b;
+  }));
+  $('prompt').hidden = false;
+}
+function hideAsk() { openAsk = null; $('prompt').hidden = true; }
+
+const events = new EventSource('/api/events');
+events.onmessage = ({ data }) => {
+  const ev = JSON.parse(data);
+  if (ev.type === 'start') { running = ev.job; $('log').replaceChildren(); log(`▶ ${ev.job}`); }
+  if (ev.type === 'log') log(ev.text);
+  if (ev.type === 'ask') { log(`? ${ev.text}`); for (const i of ev.items ?? []) log(`   ${i}`, i.startsWith('⚠') ? 'err' : 'muted'); showAsk(ev); }
+  if (ev.type === 'answered' && ev.id === openAsk) hideAsk();
+  if (ev.type === 'done') { running = false; hideAsk(); log('Done.', 'ok'); }
+  if (ev.type === 'error') {
+    running = false; hideAsk(); log(`Stopped: ${ev.text}`, 'err');
+    if (ev.text !== 'Cancelled') log('If Chrome had opened the site, error.png in the project folder shows where it stopped.');
+  }
+  refreshButtons();
+};
+
+loadSettings();
+refreshButtons();
+$('month').value = new Date().toISOString().slice(0, 7);
+loadReport();
+</script>
+</body>
+</html>

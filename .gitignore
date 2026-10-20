@@ -1,0 +1,7 @@
+node_modules/
+.browser-profile/
+config.json
+reports/
+error.png
+*.csv
+.DS_Store
