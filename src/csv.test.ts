@@ -17,7 +17,7 @@ test('reads timesheet rows, skips blanks and footer', () => {
   assert.equal(entries.length, 2);
   assert.deepEqual(entries[0], {
     date: '2026-10-14', projectId: 'P-001', projectName: 'Demo Project',
-    task: 'TICKET-1 [BE] Fix total, sort', hours: 3.5, remark: 'ONSITE',
+    task: 'TICKET-1 [BE] Fix total, sort', hours: 3.5, remark: 'ONSITE', resource: 'X',
   });
   assert.equal(entries[1].task, 'Version’s philosophy');
 });

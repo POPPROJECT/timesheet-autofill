@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { loadConfig, type AskKind, type Ui } from './browser.ts';
 import { entriesFromBytes, type Entry } from './csv.ts';
-import { emptyReport, summarize, type Report } from './draft-report.ts';
+import { emptyReport, reportFile, summarize, type Report } from './draft-report.ts';
 import { runNhr } from './fill-nhr.ts';
 import { runReport } from './fill-report.ts';
 import { runOdc } from './fill-timesheet.ts';
@@ -74,9 +74,12 @@ function send(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
-function reportPath(month: string | null): string {
+// Whose report: the person on the loaded CSV for that month, else the name in Settings
+function reportTarget(month: string | null) {
   if (!month || !MONTH.test(month)) throw new HttpError(400, 'month must be YYYY-MM');
-  return `reports/${month}.json`;
+  const monthEntries = entries.filter(e => e.date.startsWith(month));
+  const person = monthEntries[0]?.resource || loadConfig().reporterName;
+  return { month, monthEntries, person, path: reportFile(month, person) };
 }
 
 async function route(req: IncomingMessage, res: ServerResponse) {
@@ -114,18 +117,17 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (key === 'GET /api/report') {
-    const month = url.searchParams.get('month');
-    const path = reportPath(month);
+    const { monthEntries, person, path } = reportTarget(url.searchParams.get('month'));
+    const meta = { path, person, settingsName: loadConfig().reporterName };
     // A saved file (from Save or an AI agent) wins; otherwise start from the CSV summary
-    if (existsSync(path)) return send(res, 200, { report: JSON.parse(readFileSync(path, 'utf8')), source: 'saved', path });
-    const monthEntries = entries.filter(e => e.date.startsWith(month!));
+    if (existsSync(path)) return send(res, 200, { report: JSON.parse(readFileSync(path, 'utf8')), source: 'saved', ...meta });
     const report = emptyReport(monthEntries[0]?.projectName ?? entries[0]?.projectName);
-    if (monthEntries.length) return send(res, 200, { report: { ...report, ...summarize(monthEntries) }, source: 'generated', path });
-    return send(res, 200, { report, source: 'empty', path });
+    if (monthEntries.length) return send(res, 200, { report: { ...report, ...summarize(monthEntries) }, source: 'generated', ...meta });
+    return send(res, 200, { report, source: 'empty', ...meta });
   }
   if (key === 'PUT /api/report') {
-    const path = reportPath(url.searchParams.get('month'));
-    mkdirSync('reports', { recursive: true });
+    const { month, path } = reportTarget(url.searchParams.get('month'));
+    mkdirSync(`reports/${month}`, { recursive: true });
     writeFileSync(path, JSON.stringify({ ...emptyReport(), ...(await json<Report>(req)) }, null, 2) + '\n');
     return send(res, 200, { saved: path });
   }

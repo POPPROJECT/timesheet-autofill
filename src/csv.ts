@@ -8,6 +8,7 @@ export type Entry = {
   task: string;
   hours: number;
   remark: string;
+  resource: string; // Resources column: whose timesheet this is
 };
 
 export function parseCsv(text: string): string[][] {
@@ -47,7 +48,7 @@ export function toEntries(rows: string[][]): Entry[] {
     if (i < 0) throw new Error(`Column "${prefix}" not found in header`);
     return i;
   };
-  const c = { date: col('Date'), id: col('Project ID'), name: col('Project Name'), task: col('Activity'), hours: col('Hours'), remark: col('Remarks') };
+  const c = { date: col('Date'), id: col('Project ID'), name: col('Project Name'), task: col('Activity'), hours: col('Hours'), remark: col('Remarks'), resource: header.findIndex(h => h.startsWith('Resources')) };
 
   const entries: Entry[] = [];
   for (const [n, r] of rows.slice(headerAt + 1).entries()) {
@@ -64,6 +65,7 @@ export function toEntries(rows: string[][]): Entry[] {
       task,
       hours,
       remark: r[c.remark]?.trim() ?? '',
+      resource: r[c.resource]?.trim() ?? '',
     });
   }
   return entries;

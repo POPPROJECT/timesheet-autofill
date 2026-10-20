@@ -33,4 +33,4 @@ If a run stops, `error.png` shows the page at that moment.
 
 ## Command line
 
-`npm run timesheet|nhr -- <file.csv> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--dry-run]`, `npm run report -- reports/YYYY-MM.json`, `npm test`.
+`npm run timesheet|nhr -- <file.csv> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--dry-run]`, `npm run report -- reports/YYYY-MM/<name>.json`, `npm test`.

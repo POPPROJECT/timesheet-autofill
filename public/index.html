@@ -132,6 +132,7 @@
   .sections .field:nth-child(-n+2) textarea { min-height: 150px; }
   .count { float: right; font-weight: 500; color: var(--faint); }
   .source-row { margin: -4px 0 16px; }
+  .person-warn { margin: -4px 0 14px; padding: 10px 12px; border-radius: 8px; background: var(--bad-soft); color: var(--bad); font-size: 13px; font-weight: 600; }
   .source { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--sunken); border: 1px solid var(--line); color: var(--muted); }
   .source.saved { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
   .source.unsaved { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
@@ -264,17 +265,18 @@
           <div><h2>Monthly Report</h2><p>One item per line, high level, no ticket numbers.</p></div>
           <div class="actions">
             <button class="btn" id="draft" disabled title="Rewrite Key Highlights and Upcoming Focus from the CSV loaded in Setup">Generate from CSV</button>
-            <button class="btn" id="reloadSaved" disabled title="Load reports/YYYY-MM.json again, e.g. after an AI agent wrote it">Load saved</button>
+            <button class="btn" id="reloadSaved" disabled title="Load reports/YYYY-MM/&lt;name&gt;.json again, e.g. after an AI agent wrote it">Load saved</button>
           </div>
         </div>
+        <div class="person-warn" id="personWarn" hidden></div>
         <div class="source-row"><span id="reportSource" class="source"></span>
           <details class="ways"><summary>Ways to fill this</summary>
             <ul>
               <li><b>Generate from CSV</b>: rule-based summary of the timesheet loaded in Setup. Works offline; general wording.</li>
               <li><b>Write it yourself</b>: edit the boxes below, then Save.</li>
-              <li><b>AI agent</b>: open this folder in Claude Code and run <code>/monthly-report &lt;file.csv&gt;</code>, or ask any agent to follow <code>AGENTS.md</code>. It writes <code>reports/YYYY-MM.json</code>; then press Load saved.</li>
+              <li><b>AI agent</b>: open this folder in Claude Code and run <code>/monthly-report &lt;file.csv&gt;</code>, or ask any agent to follow <code>AGENTS.md</code>. It writes <code>reports/YYYY-MM/&lt;name&gt;.json</code>; then press Load saved.</li>
             </ul>
-            <p>Save writes the boxes to <code>reports/YYYY-MM.json</code> on this machine. Fill report form saves first, then fills the site.</p>
+            <p>Save writes the boxes to <code>reports/YYYY-MM/&lt;name&gt;.json</code> on this machine. Fill report form saves first, then fills the site.</p>
           </details>
         </div>
         <div class="grid2">
@@ -430,9 +432,15 @@ async function loadCsv(file) {
   $('noCsv').hidden = true;
   $('runCard').hidden = false;
   $('setupPill').textContent = monthName(month);
-  log(`Loaded ${file.name}: ${plural(entries.length, 'row')}.`);
+  log(`Loaded ${file.name}: ${plural(entries.length, 'row')}${entries[0].resource ? ` for ${entries[0].resource}` : ''}.`);
+  if (!$('reporterName').value.trim() && entries[0].resource) {
+    $('reporterName').value = entries[0].resource;
+    await saveConfig();
+    log(`Settings name set to ${entries[0].resource} from the CSV.`);
+  }
   renderRows();
-  if ($('month').value !== month) { $('month').value = month; await loadReport(); }
+  $('month').value = month;
+  await loadReport(); // another person's CSV for the same month needs its own report
 }
 $('drop').onclick = () => $('file').click();
 $('file').onchange = () => { $('file').files[0] && loadCsv($('file').files[0]); $('file').value = ''; };
@@ -473,7 +481,11 @@ const currentReport = () => ({
 });
 async function loadReport() {
   if (!$('month').value) return;
-  const { report, source, path } = await api('GET', `/api/report?month=${$('month').value}`);
+  const { report, source, path, person, settingsName } = await api('GET', `/api/report?month=${$('month').value}`);
+  const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const mismatch = person && settingsName && !same(person, settingsName);
+  $('personWarn').hidden = !mismatch;
+  if (mismatch) $('personWarn').textContent = `This is ${person}'s timesheet, but the name in Settings is ${settingsName}. Fill report form will send ${settingsName}; change the name in Settings if that is wrong.`;
   $('projectName').value = report.projectName ?? '';
   for (const [key] of SECTIONS) $(key).value = (report[key] ?? []).join('\n');
   refreshCounts();

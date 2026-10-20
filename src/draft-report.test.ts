@@ -22,3 +22,14 @@ test('a meetings-only month gets only the matching lines', () => {
   assert.deepEqual(keyHighlights, ['Contributed to team planning, task estimation and progress reviews.']);
   assert.equal(upcomingFocus.length, 2);
 });
+
+test('a testing month gets testing lines, not developer lines', () => {
+  const { keyHighlights, upcomingFocus } = summarize(month(
+    'TICKET-3 [QA] Create test cases for the strategy list',
+    'Regression test before release',
+    'Verify bug fixes on the risk page',
+  ));
+  assert.ok(keyHighlights.some(line => line.startsWith('Tested application features')));
+  assert.ok(!keyHighlights.some(line => line.startsWith('Developed') || line.startsWith('Fixed') || line.startsWith('Improved page')));
+  assert.ok(upcomingFocus.some(line => line.startsWith('Continue testing')));
+});
