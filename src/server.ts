@@ -116,13 +116,12 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   if (key === 'GET /api/report') {
     const month = url.searchParams.get('month');
     const path = reportPath(month);
-    const report: Report = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : emptyReport(entries[0]?.projectName);
-    // A month not written yet starts from the summary of the loaded CSV
+    // A saved file (from Save or an AI agent) wins; otherwise start from the CSV summary
+    if (existsSync(path)) return send(res, 200, { report: JSON.parse(readFileSync(path, 'utf8')), source: 'saved', path });
     const monthEntries = entries.filter(e => e.date.startsWith(month!));
-    if (monthEntries.length && !report.keyHighlights.length && !report.upcomingFocus.length) {
-      return send(res, 200, { ...report, ...summarize(monthEntries), generated: true });
-    }
-    return send(res, 200, report);
+    const report = emptyReport(monthEntries[0]?.projectName ?? entries[0]?.projectName);
+    if (monthEntries.length) return send(res, 200, { report: { ...report, ...summarize(monthEntries) }, source: 'generated', path });
+    return send(res, 200, { report, source: 'empty', path });
   }
   if (key === 'PUT /api/report') {
     const path = reportPath(url.searchParams.get('month'));
