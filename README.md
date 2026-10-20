@@ -22,7 +22,10 @@ Settings are saved to `config.json`, which stays on your machine (git-ignored).
 2. **Fill ODC** with the PTTEP VPN on, then **Fill NHR** with the Extosoft VPN on.
    The first run asks you to sign in. The `.browser-profile` folder keeps the sign-in after that.
    Each run skips rows already on the site and asks before adding.
-3. Write the Monthly Report items, one per line, then **Fill report form**. Review it and press Submit Report on the site yourself.
+3. Open **Monthly Report**. A new month starts from a summary generated from the CSV. Edit it, then **Fill report form**, review, and press Submit Report on the site yourself.
+   For a summary written by an AI agent instead, open the repo in Claude Code and run `/monthly-report <file.csv>`, or ask any agent to follow `AGENTS.md`.
+
+To change how the summary is worded or adapt to a site change, see `AGENTS.md`.
 
 The CSV must use the SharePoint template columns: `Date (MMDDYYYY)`, `Project ID`, `Project Name`, `Activity / Task Description`, `Hours`, `Remarks` (`WFH` / `ONSITE`).
 

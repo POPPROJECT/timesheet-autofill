@@ -251,8 +251,8 @@
     <div data-panel="report" hidden>
       <div class="card">
         <div class="card-head">
-          <div><h2>Monthly Report</h2><p>One item per line. Keep it high level: what users got, not ticket numbers.</p></div>
-          <div class="actions"><button class="btn" id="draft" disabled>Insert ticket list</button></div>
+          <div><h2>Monthly Report</h2><p>One item per line, high level, no ticket numbers. A new month starts from a summary of the CSV; edit it, or have an AI agent write it (see AGENTS.md).</p></div>
+          <div class="actions"><button class="btn" id="draft" disabled title="Rewrite Key Highlights and Upcoming Focus from the loaded CSV">Generate summary</button></div>
         </div>
         <div class="grid2">
           <div class="field"><label for="month">Month</label><input id="month" type="month"></div>
@@ -436,6 +436,7 @@ async function loadReport() {
   $('projectName').value = report.projectName ?? '';
   for (const [key] of SECTIONS) $(key).value = (report[key] ?? []).join('\n');
   refreshCounts();
+  if (report.generated) log(`Summary for ${monthName($('month').value)} generated from the CSV. Edit it, then Save.`);
 }
 async function saveReport() {
   if (!$('month').value) throw ($('msg').textContent = 'Pick a month first');
@@ -444,9 +445,10 @@ async function saveReport() {
 $('month').onchange = loadReport;
 $('saveReport').onclick = async () => { await saveReport(); log(`Saved report for ${monthName($('month').value)}.`, 'ok'); };
 $('draft').onclick = async () => {
-  const { keyHighlights } = await api('GET', `/api/report/draft?month=${$('month').value}`);
-  $('keyHighlights').value = [$('keyHighlights').value.trim(), ...keyHighlights].filter(Boolean).join('\n');
+  const summary = await api('GET', `/api/report/summary?month=${$('month').value}`);
+  for (const key of ['keyHighlights', 'upcomingFocus']) $(key).value = summary[key].join('\n');
   refreshCounts();
+  log('Key Highlights and Upcoming Focus regenerated from the CSV.');
 };
 $('runReport').onclick = async () => {
   if (!$('reporterName').value.trim()) {

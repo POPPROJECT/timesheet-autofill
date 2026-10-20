@@ -1,5 +1,5 @@
-// Draft reports/YYYY-MM.json from the timesheet CSV. Key Highlights is pre-filled;
-// edit it and fill the other sections by hand before running fill-report.
+// Monthly Report type and the rule-based summary of a month's timesheet.
+// npm run draft -- <timesheet.csv>  writes reports/YYYY-MM.json from the summary.
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readEntries, type Entry } from './csv.ts';
 
@@ -13,23 +13,42 @@ export type Report = {
   needSupport: string[];
 };
 
-const SECTIONS: [title: string, match: (task: string) => boolean][] = [
-  ['Frontend', t => t.includes('[FE]')],
-  ['Backend', t => t.includes('[BE]')],
-  ['Meetings & Scrum', t => t.startsWith('[')],
-  ['Documents & Others', () => true],
+type Rule = { match: RegExp; text: string };
+
+// A line is used when any task in the month matches its pattern, in this order.
+// Edit the wording or patterns here to change the generated report.
+export const HIGHLIGHT_RULES: Rule[] = [
+  { match: /\[(FE|BE|API)\]|\b(develop|build|implement|integrate|create)\b/i,
+    text: "Developed and updated application features based on the team's planned work." },
+  { match: /layout|table|grid|menu|sidebar|card|chart|page|dropdown|avatar|filter|search/i,
+    text: 'Improved page layouts, navigation menus, data tables and charts to make information easier to access and review.' },
+  { match: /\[(BE|API)\]|\b(api|service|schema|migration|database)\b/i,
+    text: 'Built and enhanced backend services and data handling to support the application features.' },
+  { match: /\b(fix|bug|defect|error|issue|required)\b/i,
+    text: 'Fixed issues affecting data entry and information display, and improved code quality to support ongoing maintenance.' },
+  { match: /meeting|stand ?up|sprint|grooming|retro|planning|estimat|backlog/i,
+    text: 'Contributed to team planning, task estimation and progress reviews.' },
+  { match: /document|\bucr\b|\bpcr\b|deploy|release/i,
+    text: 'Prepared supporting documentation and participated in system release activities.' },
 ];
 
-// One short line per section, ticket keys only: a starting point to rewrite by feature
-export function highlights(entries: Entry[]): string[] {
-  const groups = SECTIONS.map(([title]) => ({ title, hours: 0, items: new Set<string>() }));
-  for (const e of entries) {
-    const g = groups[SECTIONS.findIndex(([, match]) => match(e.task))];
-    g.hours += e.hours;
-    g.items.add(/^EAPM-\d+/.exec(e.task)?.[0] ?? e.task.replace(/^\[[^\]]*\]:?\s*/, ''));
-  }
-  return groups.filter(g => g.items.size).map(g => `${g.title} (${g.hours}h): ${[...g.items].join(', ')}`);
+export const FOCUS_RULES: Rule[] = [
+  { match: /\[(FE|BE|API)\]|\b(develop|build|implement|integrate|create)\b/i,
+    text: "Continue developing and improving application features based on the team's planned work." },
+  { match: /./,
+    text: 'Continue resolving application issues and improving usability and code quality.' },
+  { match: /meeting|sprint|grooming|planning|estimat|backlog/i,
+    text: 'Work with the team to review upcoming requirements, refine task estimates and plan development activities.' },
+];
+
+export function summarize(entries: Entry[]): Pick<Report, 'keyHighlights' | 'upcomingFocus'> {
+  const tasks = entries.map(e => e.task);
+  const pick = (rules: Rule[]) => rules.filter(r => tasks.some(t => r.match.test(t))).map(r => r.text);
+  return { keyHighlights: pick(HIGHLIGHT_RULES), upcomingFocus: pick(FOCUS_RULES) };
 }
+
+export const emptyReport = (projectName = ''): Report =>
+  ({ projectName, keyHighlights: [], upcomingFocus: [], issues: [], concerns: [], risks: [], needSupport: [] });
 
 if (import.meta.main) {
   const csv = process.argv[2];
@@ -39,7 +58,7 @@ if (import.meta.main) {
   const out = `reports/${month}.json`;
   if (existsSync(out)) throw new Error(`${out} exists; delete it to redraft`);
 
-  const report: Report = { projectName: entries[0].projectName, keyHighlights: highlights(entries), upcomingFocus: [], issues: [], concerns: [], risks: [], needSupport: [] };
+  const report: Report = { ...emptyReport(entries[0].projectName), ...summarize(entries) };
   mkdirSync('reports', { recursive: true });
   writeFileSync(out, JSON.stringify(report, null, 2) + '\n');
   console.log(`Wrote ${out}`);

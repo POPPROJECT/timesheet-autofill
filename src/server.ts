@@ -4,15 +4,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { loadConfig, type AskKind, type Ui } from './browser.ts';
 import { entriesFromBytes, type Entry } from './csv.ts';
-import { highlights, type Report } from './draft-report.ts';
+import { emptyReport, summarize, type Report } from './draft-report.ts';
 import { runNhr } from './fill-nhr.ts';
 import { runReport } from './fill-report.ts';
 import { runOdc } from './fill-timesheet.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MONTH = /^\d{4}-\d{2}$/;
-const emptyReport = (projectName = ''): Report =>
-  ({ projectName, keyHighlights: [], upcomingFocus: [], issues: [], concerns: [], risks: [], needSupport: [] });
 
 let entries: Entry[] = []; // last uploaded CSV
 let job: string | null = null;
@@ -116,8 +114,15 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (key === 'GET /api/report') {
-    const path = reportPath(url.searchParams.get('month'));
-    return send(res, 200, existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : emptyReport(entries[0]?.projectName));
+    const month = url.searchParams.get('month');
+    const path = reportPath(month);
+    const report: Report = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : emptyReport(entries[0]?.projectName);
+    // A month not written yet starts from the summary of the loaded CSV
+    const monthEntries = entries.filter(e => e.date.startsWith(month!));
+    if (monthEntries.length && !report.keyHighlights.length && !report.upcomingFocus.length) {
+      return send(res, 200, { ...report, ...summarize(monthEntries), generated: true });
+    }
+    return send(res, 200, report);
   }
   if (key === 'PUT /api/report') {
     const path = reportPath(url.searchParams.get('month'));
@@ -125,9 +130,11 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     writeFileSync(path, JSON.stringify({ ...emptyReport(), ...(await json<Report>(req)) }, null, 2) + '\n');
     return send(res, 200, { saved: path });
   }
-  if (key === 'GET /api/report/draft') {
+  if (key === 'GET /api/report/summary') {
     const month = url.searchParams.get('month') ?? '';
-    return send(res, 200, { keyHighlights: highlights(entries.filter(e => e.date.startsWith(month))) });
+    const monthEntries = entries.filter(e => e.date.startsWith(month));
+    if (!monthEntries.length) throw new HttpError(400, `Load a timesheet CSV for ${month} first`);
+    return send(res, 200, summarize(monthEntries));
   }
 
   if (key === 'POST /api/run') {
