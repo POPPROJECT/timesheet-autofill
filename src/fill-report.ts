@@ -1,8 +1,8 @@
-// npm run report -- reports/YYYY-MM/<name>.json
+// npm run report -- reports/YYYY-MM.json
 // Fills the form and stops; you review and press Submit Report yourself.
 import { readFileSync } from 'node:fs';
 import { cliUi, loadConfig, openPage, screenshotOnError, siteUrl, type Ui } from './browser.ts';
-import type { Report } from './draft-report.ts';
+import type { Report } from './report.ts';
 
 // report key -> category key used in the page's element ids
 export const CATEGORIES: [keyof Report, string][] = [
@@ -52,6 +52,6 @@ export async function runReport(report: Report, ui: Ui) {
 
 if (import.meta.main) {
   const path = process.argv[2];
-  if (!path) throw new Error('Usage: npm run report -- reports/YYYY-MM/<name>.json');
+  if (!path) throw new Error('Usage: npm run report -- reports/YYYY-MM.json');
   await runReport(JSON.parse(readFileSync(path, 'utf8')), cliUi);
 }

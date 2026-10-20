@@ -6,7 +6,6 @@
     "start": "node src/server.ts",
     "timesheet": "node src/fill-timesheet.ts",
     "nhr": "node src/fill-nhr.ts",
-    "draft": "node src/draft-report.ts",
     "report": "node src/fill-report.ts",
     "test": "node --test src/*.test.ts"
   },

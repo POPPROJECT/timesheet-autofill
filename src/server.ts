@@ -1,16 +1,15 @@
 // npm start -> http://localhost:3000
 // Local only: the fill scripts drive Chrome on this machine with this user's sign-ins.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { loadConfig, type AskKind, type Ui } from './browser.ts';
 import { entriesFromBytes, type Entry } from './csv.ts';
-import { emptyReport, reportFile, summarize, type Report } from './draft-report.ts';
+import { emptyReport, MONTH, reportFile, type Report } from './report.ts';
 import { runNhr } from './fill-nhr.ts';
 import { runReport } from './fill-report.ts';
 import { runOdc } from './fill-timesheet.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
-const MONTH = /^\d{4}-\d{2}$/;
 
 let entries: Entry[] = []; // last uploaded CSV
 let job: string | null = null;
@@ -70,16 +69,14 @@ class HttpError extends Error {
 }
 
 function send(res: ServerResponse, status: number, data: unknown) {
-  res.writeHead(status, { 'content-type': 'application/json' });
+  res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   res.end(JSON.stringify(data));
 }
 
-// Whose report: the person on the loaded CSV for that month, else the name in Settings
 function reportTarget(month: string | null) {
   if (!month || !MONTH.test(month)) throw new HttpError(400, 'month must be YYYY-MM');
   const monthEntries = entries.filter(e => e.date.startsWith(month));
-  const person = monthEntries[0]?.resource || loadConfig().reporterName;
-  return { month, monthEntries, person, path: reportFile(month, person) };
+  return { month, monthEntries, person: monthEntries[0]?.resource ?? '', path: reportFile(month) };
 }
 
 async function route(req: IncomingMessage, res: ServerResponse) {
@@ -119,23 +116,20 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   if (key === 'GET /api/report') {
     const { monthEntries, person, path } = reportTarget(url.searchParams.get('month'));
     const meta = { path, person, settingsName: loadConfig().reporterName };
-    // A saved file (from Save or an AI agent) wins; otherwise start from the CSV summary
+    // The file is written by an AI agent (AGENTS.md) or by Save
     if (existsSync(path)) return send(res, 200, { report: JSON.parse(readFileSync(path, 'utf8')), source: 'saved', ...meta });
-    const report = emptyReport(monthEntries[0]?.projectName ?? entries[0]?.projectName);
-    if (monthEntries.length) return send(res, 200, { report: { ...report, ...summarize(monthEntries) }, source: 'generated', ...meta });
-    return send(res, 200, { report, source: 'empty', ...meta });
+    return send(res, 200, { report: emptyReport(monthEntries[0]?.projectName ?? entries[0]?.projectName), source: 'empty', ...meta });
   }
   if (key === 'PUT /api/report') {
-    const { month, path } = reportTarget(url.searchParams.get('month'));
-    mkdirSync(`reports/${month}`, { recursive: true });
+    const { path } = reportTarget(url.searchParams.get('month'));
+    mkdirSync('reports', { recursive: true });
     writeFileSync(path, JSON.stringify({ ...emptyReport(), ...(await json<Report>(req)) }, null, 2) + '\n');
     return send(res, 200, { saved: path });
   }
-  if (key === 'GET /api/report/summary') {
-    const month = url.searchParams.get('month') ?? '';
-    const monthEntries = entries.filter(e => e.date.startsWith(month));
-    if (!monthEntries.length) throw new HttpError(400, `Load a timesheet CSV for ${month} first`);
-    return send(res, 200, summarize(monthEntries));
+
+  if (key === 'GET /api/reports') {
+    const months = existsSync('reports') ? readdirSync('reports').filter(f => MONTH.test(f.slice(0, -5)) && f.endsWith('.json')).map(f => f.slice(0, -5)).sort().reverse() : [];
+    return send(res, 200, { months });
   }
 
   if (key === 'POST /api/run') {

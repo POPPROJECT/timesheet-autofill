@@ -9,7 +9,7 @@ Playwright drives the user's own Chrome (`channel: 'chrome'`) with a persistent 
 The user signs in, confirms each batch, and presses Submit on every site themselves.
 
 - `npm start` runs `src/server.ts` and serves the page `public/index.html` at http://localhost:3000.
-- CLI: `npm run timesheet|nhr -- <file.csv> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--dry-run]`, `npm run draft -- <file.csv>`, `npm run report -- reports/YYYY-MM/<name>.json`.
+- CLI: `npm run timesheet|nhr -- <file.csv> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--dry-run]`, `npm run report -- reports/YYYY-MM.json`.
 - `npm test` runs `node --test` on `src/*.test.ts`.
 
 | File | Role |
@@ -18,13 +18,13 @@ The user signs in, confirms each batch, and presses Submit on every site themsel
 | `src/fill-timesheet.ts` | ODC filler |
 | `src/fill-nhr.ts` | NHR filler (time periods, lunch hour, per-day save) |
 | `src/fill-report.ts` | Monthly Report form filler |
-| `src/draft-report.ts` | `Report` type, the rule-based summary (`HIGHLIGHT_RULES`, `FOCUS_RULES`), and `reportFile` (one report per person per month) |
+| `src/report.ts` | `Report` type and `reportFile` (`reports/YYYY-MM.json`) |
 | `src/browser.ts` | Config, Chrome launch, the `Ui` interface shared by the CLI and the web page |
 | `src/server.ts` | Local HTTP API and server-sent events for the page |
 
 ## Task: write the Monthly Report
 
-Use this when the user asks for the monthly report, or runs `/monthly-report`.
+Use this when the user asks for the monthly report, or runs `/monthly-report`. The app does not write the summary itself; this task is how the report gets written.
 
 1. Read the timesheet CSV the user names. If they named none, use the newest `*.csv` in `~/Downloads` and say which file you used.
    The file is Windows-1252, so read it through the project's parser:
@@ -32,7 +32,7 @@ Use this when the user asks for the monthly report, or runs `/monthly-report`.
    node --input-type=module -e "import { readEntries } from './src/csv.ts'; for (const e of readEntries(process.argv[1])) console.log(e.date, e.hours + 'h', e.remark, e.task)" <file.csv>
    ```
 2. If you have an issue-tracker connection (for example Jira), you may look up the user's open tickets in the current sprint to ground Upcoming Focus. Do not invent work that appears in neither source.
-3. Write `reports/YYYY-MM/<name>.json`. YYYY-MM is the CSV's month. `<name>` is the CSV's Resources column in lower case with every run of non-letters/digits turned into `-` (for example `Jane Doe` → `jane-doe`); see `reportFile` in `src/draft-report.ts`. Overwrite an existing file only if the user says so; otherwise ask first.
+3. Write `reports/YYYY-MM.json`, where YYYY-MM is the CSV's month. Overwrite an existing file only if the user says so; otherwise ask first.
    ```json
    {
      "projectName": "<Project Name column from the CSV>",
@@ -44,7 +44,7 @@ Use this when the user asks for the monthly report, or runs `/monthly-report`.
      "needSupport": []
    }
    ```
-4. Tell the user to refresh the **Monthly Report** tab, review the text, then press **Fill report form**.
+4. Tell the user to pick that month in the **Monthly Report** tab (or click it under Saved), press **Load saved**, review the text, then press **Fill report form**.
 
 Style, which the readers of this report expect:
 
@@ -72,7 +72,6 @@ Example of the expected tone:
 
 ## Changing things
 
-- **Generated wording**: edit `HIGHLIGHT_RULES` / `FOCUS_RULES` in `src/draft-report.ts`. A line is used when any task in the month matches `match` and not `unless` (testing tasks are kept out of the developer lines that way). Run `npm test`.
 - **A site changed and a run fails**: `error.png` shows the page at the failure. Inspect the live page with a throwaway Playwright script on the same `.browser-profile`, then press Cancel. Never press Save or Submit while probing. Prefer roles and labels over placeholders or CSS classes.
   - ODC: each day is `#tsday-YYYY-MM-DD`; form fields are found by their `.field-label`.
   - NHR: rows use `data-task-field` attributes. Read the comments in `src/fill-nhr.ts` before changing it: NHR moves focus after `+ Task`, switches Category to OT while times are typed, and re-renders when the page changes.

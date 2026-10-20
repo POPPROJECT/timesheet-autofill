@@ -57,10 +57,38 @@
   /* Form */
   label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
   .field { margin-bottom: 14px; }
-  input[type=text], input[type=url], input[type=month], select, textarea {
-    width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunken); color: var(--ink); font: inherit;
+  input[type=text], input[type=url], select, textarea, .mp-btn {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background-color: var(--sunken); color: var(--ink); font: inherit;
   }
-  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  input[type=text], input[type=url], select, .mp-btn { height: 40px; }
+  input:hover, select:hover, textarea:hover, .mp-btn:hover { border-color: var(--faint); }
+  input:focus, select:focus, textarea:focus, .mp-btn:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 0; border-color: var(--accent); }
+  select { appearance: none; -webkit-appearance: none; padding-right: 36px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238a94a6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 18px; }
+  select:invalid, select.placeholder { color: var(--faint); }
+  select option { color: var(--ink); background: var(--card); }
+
+  /* Month picker */
+  .mp { position: relative; }
+  .mp-btn { display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
+  .mp-btn span { flex: 1; }
+  .mp-btn svg { color: var(--faint); flex: none; }
+  .mp-pop { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 280px; padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--card); box-shadow: 0 12px 32px rgba(16, 24, 40, .16); }
+  .mp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .mp-head b { font-size: 14px; }
+  .mp-head button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; font-size: 16px; line-height: 1; }
+  .mp-head button:hover { background: var(--sunken); }
+  .mp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .mp-grid button { position: relative; height: 38px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
+  .mp-grid button:hover { background: var(--sunken); border-color: var(--line); }
+  .mp-grid button.today { border-color: var(--line); }
+  .mp-grid button.saved::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--ok); }
+  .mp-grid button.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .mp-grid button.selected::after { background: var(--accent-ink); }
+  .mp-foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .mp-foot button { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+  .mp-foot i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: middle; }
   textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
   @media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
@@ -136,9 +164,12 @@
   .source { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--sunken); border: 1px solid var(--line); color: var(--muted); }
   .source.saved { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
   .source.unsaved { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
-  .ways { margin-top: 10px; font-size: 13px; color: var(--muted); }
-  .ways summary { cursor: pointer; font-weight: 600; }
-  .ways ul { margin: 8px 0 6px; padding-left: 18px; }
+  .ways { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--sunken); font-size: 13px; color: var(--muted); }
+  .ways b { color: var(--ink); }
+  .months { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+  .months button { font: inherit; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  .months button.current { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .ways ol { margin: 8px 0 6px; padding-left: 20px; }
   .ways li { margin-bottom: 4px; }
   .ways p { margin: 0; }
   .ways code { font-size: 12px; background: var(--sunken); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
@@ -264,23 +295,34 @@
         <div class="card-head">
           <div><h2>Monthly Report</h2><p>One item per line, high level, no ticket numbers.</p></div>
           <div class="actions">
-            <button class="btn" id="draft" disabled title="Rewrite Key Highlights and Upcoming Focus from the CSV loaded in Setup">Generate from CSV</button>
-            <button class="btn" id="reloadSaved" disabled title="Load reports/YYYY-MM/&lt;name&gt;.json again, e.g. after an AI agent wrote it">Load saved</button>
+            <button class="btn" id="reloadSaved" title="Read reports/YYYY-MM.json for the selected month again, e.g. after an AI agent wrote it">Load saved</button>
           </div>
         </div>
-        <div class="person-warn" id="personWarn" hidden></div>
-        <div class="source-row"><span id="reportSource" class="source"></span>
-          <details class="ways"><summary>Ways to fill this</summary>
-            <ul>
-              <li><b>Generate from CSV</b>: rule-based summary of the timesheet loaded in Setup. Works offline; general wording.</li>
-              <li><b>Write it yourself</b>: edit the boxes below, then Save.</li>
-              <li><b>AI agent</b>: open this folder in Claude Code and run <code>/monthly-report &lt;file.csv&gt;</code>, or ask any agent to follow <code>AGENTS.md</code>. It writes <code>reports/YYYY-MM/&lt;name&gt;.json</code>; then press Load saved.</li>
-            </ul>
-            <p>Save writes the boxes to <code>reports/YYYY-MM/&lt;name&gt;.json</code> on this machine. Fill report form saves first, then fills the site.</p>
-          </details>
+        <div class="ways">
+          <b>How to get the report written</b>
+          <ol>
+            <li>Open this folder in Claude Code, or any AI coding agent.</li>
+            <li>Run <code>/monthly-report &lt;path to the timesheet CSV&gt;</code>, or ask the agent to write the monthly report following <code>AGENTS.md</code>. It writes <code>reports/YYYY-MM.json</code>.</li>
+            <li>Pick that month below and press <b>Load saved</b>, review the text, then <b>Fill report form</b>.</li>
+          </ol>
+          <p>Or write the items yourself in the boxes below and press Save. Fill report form always saves first.</p>
         </div>
+        <div class="person-warn" id="personWarn" hidden></div>
+        <div class="source-row"><span id="reportSource" class="source"></span><span id="savedMonths" class="months"></span></div>
         <div class="grid2">
-          <div class="field"><label for="month">Month</label><input id="month" type="month"></div>
+          <div class="field"><label for="mpBtn">Month</label>
+            <div class="mp">
+              <input id="month" type="hidden">
+              <button type="button" class="mp-btn" id="mpBtn" aria-haspopup="dialog" aria-expanded="false"><span id="mpLabel">Pick a month</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+              </button>
+              <div class="mp-pop" id="mpPop" role="dialog" aria-label="Choose month" hidden>
+                <div class="mp-head"><button type="button" id="mpPrev" aria-label="Previous year">‹</button><b id="mpYear"></b><button type="button" id="mpNext" aria-label="Next year">›</button></div>
+                <div class="mp-grid" id="mpGrid"></div>
+                <div class="mp-foot"><span><i></i>has a saved report</span><button type="button" id="mpToday">This month</button></div>
+              </div>
+            </div>
+          </div>
           <div class="field"><label for="projectName">Project</label><input id="projectName" type="text" placeholder="Exactly as in the report's project list"></div>
         </div>
         <div class="sections" id="sections"></div>
@@ -331,6 +373,7 @@ async function api(method, path, body, raw) {
     method,
     headers: raw ? { 'content-type': 'application/octet-stream' } : { 'content-type': 'application/json' },
     body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
+    cache: 'no-store', // report files change underneath the page when an agent writes them
   });
   const data = await res.json();
   if (!res.ok) { $('msg').textContent = data.error ?? res.statusText; throw new Error(data.error); }
@@ -353,6 +396,7 @@ showTab(savedTab);
 async function loadSettings() {
   const config = await api('GET', '/api/config');
   for (const f of CONFIG_FIELDS) $(f).value = config[f] ?? '';
+  roleTint();
   checkUrls();
 }
 // URLs are not in the repo; they are shared privately and pasted here once
@@ -362,7 +406,9 @@ function checkUrls() {
   if (missing) $('urls').open = true;
 }
 $('saveSettings').onclick = async () => { await saveConfig(); checkUrls(); log('Settings saved.', 'ok'); };
-$('reporterName').onchange = $('reporterRole').onchange = saveConfig;
+const roleTint = () => $('reporterRole').classList.toggle('placeholder', !$('reporterRole').value);
+$('reporterRole').onchange = () => { roleTint(); saveConfig(); };
+$('reporterName').onchange = saveConfig;
 
 // CSV
 const weekday = d => new Date(d + 'T00:00').toLocaleDateString('en-US', { weekday: 'short' });
@@ -439,7 +485,7 @@ async function loadCsv(file) {
     log(`Settings name set to ${entries[0].resource} from the CSV.`);
   }
   renderRows();
-  $('month').value = month;
+  setMonth(month);
   await loadReport(); // another person's CSV for the same month needs its own report
 }
 $('drop').onclick = () => $('file').click();
@@ -451,17 +497,15 @@ $('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over')
 // Monthly Report
 const lines = text => text.split('\n').map(s => s.trim()).filter(Boolean);
 // Where the text in the boxes came from, so it is clear what Save or Load saved will do
-const reportState = { source: 'empty', path: '', dirty: false, hasSaved: false };
+const reportState = { source: 'empty', path: '', dirty: false };
 function showSource() {
   const { source, path, dirty } = reportState;
   const text = {
     saved: `Saved file · ${path}`,
-    generated: 'Generated from the CSV · not saved yet',
-    empty: 'Empty · load a CSV in Setup, write below, or use an AI agent',
+    empty: `No report yet · ${path}`,
   }[source];
-  $('reportSource').textContent = dirty ? `${text} · edited` : text;
-  $('reportSource').className = `source ${dirty || source === 'generated' ? 'unsaved' : source}`;
-  $('reloadSaved').disabled = !reportState.hasSaved;
+  $('reportSource').textContent = dirty ? `${text} · edited, not saved` : text;
+  $('reportSource').className = `source ${dirty ? 'unsaved' : source}`;
 }
 const markDirty = () => { reportState.dirty = true; showSource(); };
 
@@ -489,27 +533,69 @@ async function loadReport() {
   $('projectName').value = report.projectName ?? '';
   for (const [key] of SECTIONS) $(key).value = (report[key] ?? []).join('\n');
   refreshCounts();
-  Object.assign(reportState, { source, path, dirty: false, hasSaved: source === 'saved' });
+  Object.assign(reportState, { source, path, dirty: false });
   showSource();
-  if (source === 'generated') log(`Summary for ${monthName($('month').value)} generated from the CSV. Edit it, then Save.`);
+  await loadMonths();
+}
+// Month picker: a styled stand-in for <input type=month>, whose popup cannot be styled
+const savedMonths = new Set();
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+let pickerYear = Number(thisMonth().slice(0, 4));
+function setMonth(m) {
+  $('month').value = m;
+  $('mpLabel').textContent = m ? monthName(m) : 'Pick a month';
+}
+function renderPicker() {
+  $('mpYear').textContent = pickerYear;
+  $('mpGrid').replaceChildren(...Array.from({ length: 12 }, (_, i) => {
+    const m = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
+    const cls = [m === $('month').value && 'selected', savedMonths.has(m) && 'saved', m === thisMonth() && 'today'].filter(Boolean).join(' ');
+    const b = el('button', { type: 'button', className: cls, title: savedMonths.has(m) ? `reports/${m}.json` : '' },
+      new Date(m + '-01T00:00').toLocaleDateString('en-US', { month: 'short' }));
+    b.onclick = () => pickMonth(m);
+    return b;
+  }));
+}
+function togglePicker(open = $('mpPop').hidden) {
+  if (open) { pickerYear = Number(($('month').value || thisMonth()).slice(0, 4)); renderPicker(); }
+  $('mpPop').hidden = !open;
+  $('mpBtn').setAttribute('aria-expanded', open);
+}
+async function pickMonth(m) {
+  togglePicker(false);
+  setMonth(m);
+  await loadReport();
+}
+$('mpBtn').onclick = () => togglePicker();
+$('mpPrev').onclick = () => { pickerYear--; renderPicker(); };
+$('mpNext').onclick = () => { pickerYear++; renderPicker(); };
+$('mpToday').onclick = () => pickMonth(thisMonth());
+document.addEventListener('click', e => { if (!$('mpPop').hidden && !e.target.closest('.mp')) togglePicker(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('mpPop').hidden) { togglePicker(false); $('mpBtn').focus(); } });
+
+// Every reports/YYYY-MM.json on this machine; click one to open it
+async function loadMonths() {
+  const { months } = await api('GET', '/api/reports');
+  savedMonths.clear();
+  months.forEach(m => savedMonths.add(m));
+  $('savedMonths').replaceChildren(...(months.length ? [document.createTextNode('Saved:')] : []), ...months.map(m => {
+    const b = el('button', { className: m === $('month').value ? 'current' : '', title: `reports/${m}.json` }, monthName(m));
+    b.onclick = () => pickMonth(m);
+    return b;
+  }));
 }
 async function saveReport() {
   if (!$('month').value) throw ($('msg').textContent = 'Pick a month first');
   const { saved } = await api('PUT', `/api/report?month=${$('month').value}`, currentReport());
-  Object.assign(reportState, { source: 'saved', path: saved, dirty: false, hasSaved: true });
+  Object.assign(reportState, { source: 'saved', path: saved, dirty: false });
   showSource();
+  await loadMonths();
 }
-$('month').onchange = loadReport;
 $('saveReport').onclick = async () => { await saveReport(); log(`Saved report for ${monthName($('month').value)}.`, 'ok'); };
-$('draft').onclick = async () => {
-  const summary = await api('GET', `/api/report/summary?month=${$('month').value}`);
-  for (const key of ['keyHighlights', 'upcomingFocus']) $(key).value = summary[key].join('\n');
-  refreshCounts();
-  Object.assign(reportState, { source: 'generated', dirty: false });
-  showSource();
-  log('Key Highlights and Upcoming Focus regenerated from the CSV. Other sections were left as they were.');
+$('reloadSaved').onclick = async () => {
+  await loadReport();
+  log(reportState.source === 'saved' ? `Loaded ${reportState.path}.` : `No file at ${reportState.path} yet.`, reportState.source === 'saved' ? 'ok' : 'err');
 };
-$('reloadSaved').onclick = async () => { await loadReport(); log(`Loaded ${reportState.path}.`); };
 $('runReport').onclick = async () => {
   if (!$('reporterName').value.trim()) {
     showTab('setup');
@@ -528,7 +614,6 @@ for (const button of document.querySelectorAll('.run')) {
 function refreshButtons() {
   for (const b of document.querySelectorAll('.run')) b.disabled = running || !included.size;
   $('runReport').disabled = running;
-  $('draft').disabled = !entries.length;
   $('status').textContent = running ? `Running ${running}…` : 'Ready';
   $('status').classList.toggle('running', !!running);
 }
@@ -577,7 +662,7 @@ events.onmessage = ({ data }) => {
 
 loadSettings();
 refreshButtons();
-$('month').value = new Date().toISOString().slice(0, 7);
+setMonth(new Date().toISOString().slice(0, 7));
 loadReport();
 </script>
 </body>
