@@ -74,7 +74,7 @@ Example of the expected tone:
 
 - **A site changed and a run fails**: `error.png` shows the page at the failure. Inspect the live page with a throwaway Playwright script on the same `.browser-profile`, then press Cancel. Never press Save or Submit while probing. Prefer roles and labels over placeholders or CSS classes.
   - ODC: each day is `#tsday-YYYY-MM-DD`; form fields are found by their `.field-label`.
-  - NHR: hours round up to 0.1 and the filler makes selected days match the CSV, removing Working rows the CSV lacks after the user confirms (Leave, OT, Non-billing and unticked CSV rows stay). Rows use `data-task-field` attributes. Read the comments in `src/fill-nhr.ts` before changing it: NHR moves focus after `+ Task`, switches Category to OT while times are typed, and re-renders when the page changes.
+  - NHR: the filler makes selected days match the CSV, removing Working rows the CSV lacks after the user confirms (Leave, OT, Non-billing and unticked CSV rows stay). Rows use `data-task-field` attributes. Read the comments in `src/fill-nhr.ts` before changing it: NHR moves focus after `+ Task`, switches Category to OT while times are typed, and re-renders when the page changes.
   - Monthly Report: element ids such as `#nameInput`, `#list_1_<category>`.
 - **The page**: `public/index.html` is a single file with no build step. The server reads it on each request, so a browser refresh is enough. Changes under `src/` need `npm start` again.
 
