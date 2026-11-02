@@ -21,7 +21,8 @@ Settings are saved to `config.json`, which stays on your machine (git-ignored).
 1. In SharePoint, download the timesheet as **CSV** and drop it on the page. Untick rows you don't want sent (holidays, placeholders).
 2. **Fill ODC** with the PTTEP VPN on, then **Fill NHR** with the Extosoft VPN on.
    The first run asks you to sign in. The `.browser-profile` folder keeps the sign-in after that.
-   Each run skips rows already on the site and asks before adding.
+   Each run skips rows already on the site and asks before changing anything.
+   NHR only: hours round up to 0.1 (0.75 becomes 0.8), and Working rows not in the CSV are removed on the days you send.
 3. Have an AI agent write the Monthly Report: open this folder in Claude Code and run `/monthly-report <file.csv>`, or ask any agent to follow `AGENTS.md`.
    Then in the **Monthly Report** tab press **Load saved**, review, **Fill report form**, and press Submit Report on the site yourself.
    You can also type the items into the boxes yourself and press Save.

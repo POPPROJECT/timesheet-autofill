@@ -143,7 +143,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const chosen = (include ?? []).map(i => entries[i]).filter(Boolean);
     if (!chosen.length) throw new HttpError(400, 'No rows selected');
     if (target === 'odc') startJob('ODC', () => runOdc(chosen, webUi));
-    else if (target === 'nhr') startJob('NHR', () => runNhr(chosen, webUi));
+    else if (target === 'nhr') startJob('NHR', () => runNhr(chosen, webUi, entries));
     else throw new HttpError(400, `unknown target ${target}`);
     return send(res, 202, { job });
   }

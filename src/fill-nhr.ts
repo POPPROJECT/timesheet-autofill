@@ -1,5 +1,6 @@
 // npm run nhr -- <timesheet.csv> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--dry-run]
-// Adds entries missing from the Extosoft NHR timesheet, saving the draft after each day.
+// Makes the selected days on the Extosoft NHR timesheet match the CSV: adds missing rows and, after you
+// confirm, removes Working rows the CSV does not have. Saves the draft after each day.
 // Never presses Submit.
 import type { Locator, Page } from 'playwright';
 import { cliUi, confirmAdd, entryLine, loadConfig, openPage, screenshotOnError, siteUrl, type Ui } from './browser.ts';
@@ -10,7 +11,7 @@ export const NHR_TYPE: Record<string, string> = { WFH: 'WFH', ONSITE: 'Onsite' }
 const DAY_START = '08:00';
 const LUNCH = [12 * 60, 13 * 60]; // NHR leaves this hour out of Work Hours
 
-type Task = { taskName: string; startTime: string; endTime: string; hours: number };
+type Task = { taskName: string; startTime: string; endTime: string; hours: number; category?: string };
 type Month = { period: string; dailyLogs: { date: string; tasks: Task[] }[] };
 
 const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -21,6 +22,48 @@ export function period(start: number, hours: number): [number, number] {
   let end = start + Math.round(hours * 60);
   if (start < LUNCH[0] && end > LUNCH[0]) end += LUNCH[1] - LUNCH[0];
   return [start, end];
+}
+
+// First period from `start` that does not overlap a row already on the day
+export function freePeriod(start: number, hours: number, busy: [number, number][]): [number, number] {
+  for (;;) {
+    const [from, to] = period(start, hours);
+    const clash = busy.find(([a, b]) => from < b && to > a);
+    if (!clash) return [from, to];
+    start = clash[1];
+  }
+}
+
+export const roundUpTenth = (hours: number) => Math.ceil(hours * 10 - 1e-9) / 10;
+const tenth = (hours: number) => Math.round(hours * 10) / 10;
+const DAY_HOURS = 8;
+
+// NHR works in 0.1h steps, so 0.75 becomes 0.8. NHR refuses Working rows past 8h, so a full day
+// that rounding pushes over gives the excess back from its largest row.
+export function nhrHours(entries: Entry[]): Map<Entry, number> {
+  const hours = new Map<Entry, number>();
+  for (const list of Map.groupBy(entries, e => e.date).values()) {
+    for (const e of list) hours.set(e, roundUpTenth(e.hours));
+    const original = list.reduce((s, e) => s + e.hours, 0);
+    const rounded = list.reduce((s, e) => s + hours.get(e)!, 0);
+    if (original <= DAY_HOURS && tenth(rounded) > DAY_HOURS) {
+      const largest = list.reduce((a, b) => (hours.get(b)! > hours.get(a)! ? b : a));
+      hours.set(largest, tenth(hours.get(largest)! - tenth(rounded - DAY_HOURS)));
+    }
+  }
+  return hours;
+}
+
+// Working rows on the site that no CSV row accounts for; Leave, OT and Non-billing rows are never touched
+export function extraRows<T extends { taskName: string; hours: number; category?: string }>(tasks: T[], csv: { task: string; hours: number }[]): T[] {
+  const left = csv.map(e => `${e.task.trim()}|${e.hours}`);
+  return tasks.filter(t => {
+    if (t.category !== 'Working') return false;
+    const i = left.indexOf(`${t.taskName.trim()}|${roundUpTenth(t.hours)}`);
+    if (i < 0) return true;
+    left.splice(i, 1);
+    return false;
+  });
 }
 
 async function showDay(page: Page, date: string): Promise<Locator> {
@@ -44,7 +87,21 @@ async function setTime(row: Locator, field: 'periodStart' | 'periodEnd', value: 
   await input.press('Tab');
 }
 
-export async function runNhr(entries: Entry[], ui: Ui) {
+// A saved row's trash button, then NHR's own confirmation
+async function removeRow(page: Page, rows: Locator, task: Task) {
+  const before = await rows.count();
+  const row = rows.filter({ hasText: task.taskName.trim() }).filter({ hasText: `${task.startTime}-${task.endTime}` }).first();
+  await row.locator('.task-row__delete-button').click();
+  await page.getByRole('button', { name: /^(delete|confirm|yes)\b/i }).first().click({ timeout: 5000 });
+  await rows.nth(before - 1).waitFor({ state: 'detached' });
+}
+
+// all: every row of the CSV, including ones unticked in the page, so an unticked row on the site is not treated as extra
+export async function runNhr(chosen: Entry[], ui: Ui, all: Entry[] = chosen) {
+  const hours = nhrHours(all);
+  const forNhr = (e: Entry) => ({ ...e, hours: hours.get(e) ?? roundUpTenth(e.hours) });
+  const entries = chosen.map(forNhr);
+  const csv = all.map(forNhr);
   for (const e of entries) if (!NHR_TYPE[e.remark]) throw new Error(`${e.date}: Remarks "${e.remark}" is not WFH or ONSITE`);
   const month = entries.map(e => e.date).sort()[0].slice(0, 7);
   if (entries.some(e => !e.date.startsWith(month))) throw new Error('NHR runs one month at a time');
@@ -59,28 +116,43 @@ export async function runNhr(entries: Entry[], ui: Ui) {
     if (data.period !== month) throw new Error(`NHR opened ${data.period}, CSV is ${month}`);
     return data;
   }
-  const keys = (m: Month) => m.dailyLogs.flatMap(d => d.tasks.map(t => entryKey(d.date, t.taskName, t.hours)));
+  const keys = (m: Month) => m.dailyLogs.flatMap(d => d.tasks.map(t => entryKey(d.date, t.taskName, roundUpTenth(t.hours))));
+  const dates = new Set(entries.map(e => e.date));
+  const extrasOn = (m: Month, date: string) =>
+    extraRows(m.dailyLogs.find(d => d.date === date)?.tasks ?? [], csv.filter(e => e.date === date));
 
   const page = await openPage(siteUrl(loadConfig(), 'nhrUrl', 'NHR timesheet'), `show ${month}`, ui);
   try {
     const site = await load(page);
     const todo = missing(entries, keys(site));
-    ui.log(`${entries.length - todo.length} already on NHR, ${todo.length} to add.`);
+    const extras = [...dates].flatMap(date => extrasOn(site, date).map(t => ({ date, task: t.taskName, hours: t.hours })));
+    ui.log(`${entries.length - todo.length} already on NHR, ${todo.length} to add, ${extras.length} to remove.`);
 
-    const siteHours = site.dailyLogs.flatMap(d => d.tasks.map(t => ({ date: d.date, hours: t.hours })));
-    if (todo.length && (await ui.ask(...confirmAdd('NHR', todo, overDays(siteHours, todo))))) {
-      for (const [date, list] of Map.groupBy(todo, e => e.date)) {
+    const keptHours = site.dailyLogs.flatMap(d => {
+      const gone = dates.has(d.date) ? extrasOn(site, d.date) : [];
+      return d.tasks.filter(t => !gone.includes(t)).map(t => ({ date: d.date, hours: t.hours }));
+    });
+    if ((todo.length || extras.length) && (await ui.ask(...confirmAdd('NHR', todo, overDays(keptHours, todo), extras)))) {
+      const byDay = Map.groupBy(todo, e => e.date);
+      for (const date of new Set([...byDay.keys(), ...extras.map(x => x.date)])) {
+        const list = byDay.get(date) ?? [];
         const existing = site.dailyLogs.find(d => d.date === date)?.tasks ?? [];
-        let cursor = Math.max(toMin(DAY_START), ...existing.map(t => toMin(t.endTime)));
+        const gone = extrasOn(site, date);
         const add = await showDay(page, date);
         const card = page.locator(`[data-day-card-date="${date}"]`);
         const rows = card.locator('app-task-row');
         // the card renders before its saved rows do
         await page.waitForFunction(([sel, n]) => document.querySelectorAll(sel).length === n,
           [`[data-day-card-date="${date}"] app-task-row`, existing.length] as const);
+        for (const t of gone) {
+          await removeRow(page, rows, t);
+          ui.log(`removed ${date}  ${t.startTime}-${t.endTime}  ${t.taskName}`);
+        }
+        const busy = existing.filter(t => !gone.includes(t) && t.startTime && t.endTime)
+          .map((t): [number, number] => [toMin(t.startTime), toMin(t.endTime)]);
         for (const e of list) {
-          const [start, end] = period(cursor, e.hours);
-          cursor = end;
+          const [start, end] = freePeriod(toMin(DAY_START), e.hours, busy);
+          busy.push([start, end]);
           const count = await rows.count();
           await add.click();
           const row = rows.nth(count); // a new row stays last until it is confirmed
@@ -97,7 +169,7 @@ export async function runNhr(entries: Entry[], ui: Ui) {
           await row.locator('[data-label="Category"] select').selectOption('Working');
           await row.locator('[data-label="Type"] select').selectOption(NHR_TYPE[e.remark]);
           const shown = parseFloat(await row.locator('[data-label="Work Hours"]').innerText());
-          if (shown !== e.hours) throw new Error(`${date} ${e.task}: NHR shows ${shown}h for ${toTime(start)}-${toTime(end)}, CSV says ${e.hours}h`);
+          if (shown !== e.hours) throw new Error(`${date} ${e.task}: NHR shows ${shown}h for ${toTime(start)}-${toTime(end)}, expected ${e.hours}h`);
           // Enter confirms the row; NHR keeps it open if anything is invalid
           await row.locator('[data-task-field="project"]').press('Enter');
           await card.locator('[data-task-field="project"]').waitFor({ state: 'detached', timeout: 5000 }).catch(async () => {
@@ -106,15 +178,19 @@ export async function runNhr(entries: Entry[], ui: Ui) {
           });
           ui.log(`row   ${date}  ${toTime(start)}-${toTime(end)}  ${e.task}`);
         }
-        const [res] = await Promise.all([
-          page.waitForResponse(isMonth('PUT')),
-          page.getByRole('button', { name: 'Save', exact: true }).click(),
-        ]);
-        if (!res.ok()) throw new Error(`Save ${date} failed: ${res.status()} ${await res.text()}`);
+        // A day with only removals may have nothing left to save
+        const save = page.getByRole('button', { name: 'Save', exact: true });
+        if (await save.isEnabled()) {
+          const [res] = await Promise.all([page.waitForResponse(isMonth('PUT')), save.click()]);
+          if (!res.ok()) throw new Error(`Save ${date} failed: ${res.status()} ${await res.text()}`);
+        }
         ui.log(`saved ${date}`);
       }
-      const still = missing(entries, keys(await load(page)));
+      const after = await load(page);
+      const still = missing(entries, keys(after));
       ui.log(still.length ? `Still missing ${still.length}:\n${still.map(entryLine).join('\n')}` : 'All entries are on NHR.');
+      const left = [...dates].flatMap(date => extrasOn(after, date).map(t => `${date}  ${t.hours}h  ${t.taskName}`));
+      if (left.length) ui.log(`Still on NHR but not in the CSV:\n${left.join('\n')}`);
     }
     await ui.ask('Check the page. Submit yourself when ready.', 'done');
   } catch (err) {

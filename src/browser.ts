@@ -64,8 +64,15 @@ export async function screenshotOnError(page: Page, err: unknown): Promise<never
 
 export const entryLine = (e: { date: string; hours: number; task: string }) => `${e.date}  ${e.hours}h  ${e.task}`;
 
-// Arguments for ui.ask before adding rows; days going over 8h are listed first
-export function confirmAdd(site: string, todo: { date: string; hours: number; task: string }[], over: string[]): [string, AskKind, string[]] {
+type Line = { date: string; hours: number; task: string };
+
+// Arguments for ui.ask before changing rows; warnings and removals are listed first
+export function confirmAdd(site: string, todo: Line[], over: string[], remove: Line[] = []): [string, AskKind, string[]] {
   const warning = over.length ? ` ${over.length} day(s) would go over 8h. Check those dates in the CSV first.` : '';
-  return [`Add ${todo.length} entries to ${site}?${warning}`, 'confirm', [...over.map(d => `⚠ Over 8h: ${d}`), ...todo.map(entryLine)]];
+  const action = remove.length ? `Remove ${remove.length} and add ${todo.length} entries on ${site}?` : `Add ${todo.length} entries to ${site}?`;
+  return [`${action}${warning}`, 'confirm', [
+    ...over.map(d => `⚠ Over 8h: ${d}`),
+    ...remove.map(e => `⚠ Remove: ${entryLine(e)}`),
+    ...todo.map(entryLine),
+  ]];
 }
